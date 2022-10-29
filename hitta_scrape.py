@@ -1,6 +1,10 @@
 from bs4 import BeautifulSoup
 from urllib.parse import quote
+import copy
+import pandas as pd
 import requests 
+
+from settings import *
 
 
 class HittaScrape:
@@ -12,6 +16,8 @@ class HittaScrape:
                     'Accept-Language' : 'en-US,en;q=0.9',
                     'Connection': 'keep-alive'
                     }
+        self.companys = 0
+        self.pages = 0
 
     def returnSoup(self, url:str) -> BeautifulSoup:
         response = requests.request('GET', url, headers=self.headers)
@@ -19,64 +25,111 @@ class HittaScrape:
         bs = BeautifulSoup(html, 'html.parser')
         return bs
 
-    def search(self, word:str) -> str:
+    def searchIndustry(self, word:str) -> str:
         return f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
 
-    def scrapeMainPage(self, url:str) -> None:
+    def scrapeSearch(self, url:str):
+
+        soup = self.returnSoup(url)
+        try:
+            self.companys = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
+            self.pages = int(int(self.companys.replace(',', ''))/25)
+        except AttributeError:
+            self.companys = 0
+
+    def scrapeMainPage(self, url:str) -> list[dict]:
         
         soup = self.returnSoup(url)
 
+        company_list = []
 
         value = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
         print(f"Hittade {value} företag.")
 
         companys = soup.find_all('a', {'class': 'style_searchResultLink__2i2BY'})
         for c in companys:
-            print(c.text)
+            temp_dic = copy.deepcopy(COMPANY_TEMPLATE)
+            temp_dic['Företag'] = c.text.strip()
+            page = self.scrapeSubPage(f"https://www.hitta.se{c.attrs.get('href')}")
+            temp_dic['Org-nummer'] = page['Org-nummer']
+            temp_dic['Ort'] = page['Ort']
+            temp_dic['Nummer'] = page['Nummer']
+            temp_dic['Hemsida'] = page['Hemsida']
+            company_list.append(temp_dic)
+            
+        return company_list
 
-    def scrapeSubPage(self):
-        pass
+    def scrapeSubPage(self, url:str) -> list[str]:
+        
+        soup = self.returnSoup(url)
 
-    def googleSearch(self, company_name:str):
+        page_dict = {}
+
+        name = soup.find('h3', {'class': 'style_title__2C92s'}).text
+
+        try:
+            page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
+        except AttributeError:
+             page_dict['Ort'] = None
+
+        try:
+            page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
+        except AttributeError:
+            page_dict['Org-nummer'] = None
+
+        google_dic = self.googleSearch(name)
+
+        page_dict['Nummer'] = google_dic['Nummer']
+        page_dict['Hemsida'] = google_dic['Hemsida']
+
+        return page_dict
+
+    def googleSearch(self, company_name:str) -> dict:
+        """
+        ### Returns website (recommendation | first) & number (if in recommendation)
+        """
         
         google_url = f'https://www.google.com/search?q={quote(company_name)}'
         soup = self.returnSoup(google_url)
 
-        # frame to the right for best result
-        name = 'h2.qrShPb kno-ecr-pt PZPZlf q8U8x hNKfZe'
-        website = 'a.ab_button' #href
-        number = 'span.LrzXr zdqRlf kno-fv"'
+        try:
+            website = soup.find('a', {'class': 'ab_button'}).attrs.get('href')
+            if (website.strip() == '#'):
+                website = self.otherWebsiteGoogleSearch(soup)
+        except AttributeError:
+            website = self.otherWebsiteGoogleSearch(soup)
 
-        # links in search field
-        url_ = soup.find('div', {'class': 'yuRUbf'})
-        print(url_.text)
+        try:
+            number = soup.find('span', {'class', 'LrzXr zdqRlf kno-fv'}).text
+        except AttributeError:
+            number = None
 
+        return {'Hemsida': website, 'Nummer': number}
 
-    """
-    google    = 0662512140
-    allabolag = 066230270
+    def otherWebsiteGoogleSearch(self, bs:BeautifulSoup) -> str:
 
-    https://www.google.com/search?q=PMI%20Hotell%20Interi%C3%B6r
-    """
-
-
-
-
+        try:
+            href = bs.select('div.yuRUbf a')[0].attrs.get('href')
+            if (href.strip() != '#'):
+                return href
+            else:
+                return None
+        except:
+            return None
 
 
 
 if __name__ == '__main__':
     h = HittaScrape()
-    url = h.search('Konferenslokaler')
-    print(url)
-    #h.scrapePage(url)
+    """
+    url = h.search('pr kommunikation')
+    #print(url)
+    ls = h.scrapeMainPage(url)
+    df = pd.DataFrame(ls)
+    print(df)
+    """
 
-"""
-TODO :
-    Scrapea alla brancher och lägg in dem så man kan välja via kategori om man vill
-    https://www.hitta.se/sitemap/branscher
-
-https://www.hitta.se/kassask%C3%A5p+stockholm/f%C3%B6retag/2
-https://www.hitta.se/kassaskåp+stockholm/företag/2
-
-"""
+    url = h.searchIndustry('Golv')
+    h.scrapeSearch(url)
+    print(h.companys)
+    print(h.pages)
