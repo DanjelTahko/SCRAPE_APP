@@ -3,6 +3,8 @@ from urllib.parse import quote
 import copy
 import pandas as pd
 import requests 
+import threading
+import time
 
 from settings import *
 
@@ -18,6 +20,8 @@ class HittaScrape:
                     }
         self.companys = 0
         self.pages = 0
+
+        self.scraped = 0
 
     def returnSoup(self, url:str) -> BeautifulSoup:
         response = requests.request('GET', url, headers=self.headers)
@@ -38,13 +42,14 @@ class HittaScrape:
             self.companys = 0
 
     def scrapeMainPage(self, url:str) -> list[dict]:
+        print("started scraping")
         
         soup = self.returnSoup(url)
 
         company_list = []
 
-        value = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
-        print(f"Hittade {value} företag.")
+        #value = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
+        #print(f"Hittade {value} företag.")
 
         companys = soup.find_all('a', {'class': 'style_searchResultLink__2i2BY'})
         for c in companys:
@@ -56,6 +61,8 @@ class HittaScrape:
             temp_dic['Nummer'] = page['Nummer']
             temp_dic['Hemsida'] = page['Hemsida']
             company_list.append(temp_dic)
+
+            self.scraped += 1
             
         return company_list
 
@@ -128,8 +135,23 @@ if __name__ == '__main__':
     df = pd.DataFrame(ls)
     print(df)
     """
-
-    url = h.searchIndustry('Golv')
+    url = h.searchIndustry('inredning')
     h.scrapeSearch(url)
-    print(h.companys)
-    print(h.pages)
+    print(f"Hittade {h.companys} företag på {h.pages} sidor")
+    th = threading.Thread(target=h.scrapeMainPage, name="Scrape", args=(url,))
+    #th.start()
+    i = 1
+    while(True):
+        print(h.scraped)
+        if (i == 1):
+            i = 0
+            print("starting thread")
+            th.start()
+            print("finnished thred")
+
+        th.is_alive()
+        time.sleep(1)
+
+
+
+    
