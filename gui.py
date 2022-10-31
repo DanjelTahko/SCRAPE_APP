@@ -1,7 +1,8 @@
 import pygame
 import time
+import threading
 
-from hitta_scrape import HittaScrape
+from scrape import Scrape
 from settings import *
 
 class GUI:
@@ -23,45 +24,81 @@ class GUI:
         self.button_border = pygame.Rect(597-5, 643-5, 86+10, 34+10)
         self.button_bar    = pygame.Rect(597, 643, 86, 34)
 
+        # Loading Bar
+        self.loading_bar_border = pygame.Rect(256-5, 650-5, 768+10, 20+10)
+        self.loading_bar        = pygame.Rect(256, 650, 768, 20)
+
+
         self.state = 0
 
-        self.scrape = HittaScrape()
+        self.scrape = Scrape()
         self.scrape_bool = False
 
         self.time = 0
+        self.button_cooldown = 100
 
     def inputs(self):
+
+        current_time = pygame.time.get_ticks()
         
         mouse = pygame.mouse.get_pressed()
 
+        # button pressed
         if (mouse[0]):
-            pos = pygame.mouse.get_pos()
-            # check if click on input bar to search
-            if (self.searchbar.collidepoint(pos)):
-                self.searchbar_bool  = True
-            # check if click on button to press button
-            elif (self.button_bar.collidepoint(pos)):
-                self.searchbar_bool = False
-                print("Button pressed")
-            else:
-                self.searchbar_bool  = False
+
+            # debounce button cooldown
+            if (current_time -  self.time >= self.button_cooldown):
+
+                self.time = current_time
+
+                print("\n")
+                print("mouse clicked")
+
+                # mouse position when pressed
+                pos = pygame.mouse.get_pos()
+
+                # check if click on input bar to search
+                if (self.searchbar.collidepoint(pos)):
+                    print("searchbar clicked")
+                    self.searchbar_bool  = True
+                    self.state = 0
+       
+
+                # check if click on button to press button
+                elif (self.state == 0 and self.button_bar.collidepoint(pos)):
+                    self.searchbar_bool = False
+                    print("button - SÖK clicked")
+                    self.searchButtonPressed()
+                    self.state = 1
                 
-    def functions(self):
+                elif (self.state == 1 and self.button_bar.collidepoint(pos)):
+                    self.searchbar_bool = False
+                    print("button - STARTA clicked")
+                    self.state = 2
+       
+                else:
+                    print("else clicked")
+                    self.searchbar_bool  = False
 
-        if (self.runnable == 1):
-            url = self.scrape.searchIndustry(self.user_text)
-            self.scrape.scrapeSearch(url)
-            self.search_button_color = BASE_COLOR
+                
 
-        elif (self.runnable == 2):
-            pass 
+    def searchButtonPressed(self):
+        search_thread = threading.Thread(target=self.scrape.TEST_search, name="Search", args=(self.user_text,))
+        search_thread.start()
 
-        self.runnable = 0
 
-    def scrapeApp(self):
-        scrape_str = f"Hittade {self.scrape.companys} företag på {self.scrape.pages} sidor"
-        companys = self.font.render(scrape_str, True, COLOR4)
-        self.surface.blit(companys, (405,350))
+    def drawBox(self):
+
+        if (self.state == 1 and not self.scrape.search_thread.is_alive()):
+            if (self.scrape.total_companys != None):
+                scrape_str = f"Hittade {self.scrape.total_companys} företag på {self.scrape.total_pages} sidor"
+                companys = self.font.render(scrape_str, True, COLOR4)
+                self.surface.blit(companys, (405,350))
+            else:
+                scrape_str = f"404 : Något gick fel, saknas internetanslutning kanske?"
+                companys = self.font.render(scrape_str, True, COLOR4)
+                self.surface.blit(companys, (405,350))
+
 
     def drawBottom(self):
 
@@ -81,9 +118,12 @@ class GUI:
             text_search = self.font.render("STARTA", True, COLOR1)
             self.surface.blit(text_search, (602,649))
 
-    def draw(self):
+        elif (self.state == 2):
+            pygame.draw.rect(self.surface, COLOR4, self.loading_bar_border, border_radius=10)
+            pygame.draw.rect(self.surface, COLOR5, self.loading_bar, border_radius=10)
+            
 
-        current_time = pygame.time.get_ticks()
+    def draw(self):
 
         # Draw Top & Bottom Bar
         pygame.draw.rect(self.surface, COLOR3, pygame.Rect(0, 0, 1280, 120))
@@ -105,19 +145,19 @@ class GUI:
         
         self.surface.blit(text_surface, (133,48))
         if (self.searchbar_bool):
-            #if (current_time - self.time >= 1000):
             if (time.time() % 1 > 0.5):
                 self.cursor.left = text_rect.right
                 pygame.draw.rect(self.surface, COLOR1, self.cursor)
-                self.time = current_time
          
         # Middle box       
         pygame.draw.rect(self.surface, COLOR4, pygame.Rect(30, 150, 1220, 420), border_radius=5)
         pygame.draw.rect(self.surface, COLOR2, pygame.Rect(30+5, 150+5, 1220-10, 420-10), border_radius=5)
 
     def update(self):
+        self.inputs()
         self.draw()
         self.drawBottom()
-        self.inputs()
-        #self.functions()
+        self.drawBox()
+
+
         

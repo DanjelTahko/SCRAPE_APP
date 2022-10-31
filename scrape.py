@@ -9,7 +9,7 @@ import time
 from settings import *
 
 
-class HittaScrape:
+class Scrape:
 
     def __init__(self) -> None:
         self.headers = {
@@ -18,28 +18,51 @@ class HittaScrape:
                     'Accept-Language' : 'en-US,en;q=0.9',
                     'Connection': 'keep-alive'
                     }
-        self.companys = 0
-        self.pages = 0
+        self.total_companys = '-'
+        self.total_pages    = '-'
+        self.total_scraped  = 0
+        self.url = ""
+        self.word = ""
 
-        self.scraped = 0
+        self.search_thread = threading.Thread(target=self.TEST_search, name="Search")
+        self.scrape_thread = threading.Thread(target=self.scrapeMainPage, name="Scrape", args=(self.url,))
+
+    def TEST_search(self, word):
+        url = self.searchIndustry(word)
+        self.scrapeSearch(url)
 
     def returnSoup(self, url:str) -> BeautifulSoup:
-        response = requests.request('GET', url, headers=self.headers)
-        html = response.text 
-        bs = BeautifulSoup(html, 'html.parser')
-        return bs
+        try: # är timeout bra? färre / fler försök innan timeout?
+            response = requests.request('GET', url, headers=self.headers, timeout=4.0)
+            html = response.text 
+            bs = BeautifulSoup(html, 'html.parser')
+            return bs
+        except requests.ConnectionError as e:
+            return 'ERROR'
 
     def searchIndustry(self, word:str) -> str:
-        return f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
+        self.url =  f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
+        return self.url
 
     def scrapeSearch(self, url:str):
 
         soup = self.returnSoup(url)
+
         try:
             self.companys = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
-            self.pages = int(int(self.companys.replace(',', ''))/25)
-        except AttributeError:
-            self.companys = 0
+            company_to_int = int(self.companys.replace(',', ''))
+            get_pages = lambda c : int(c/25) + 1 if (c % 25 > 0) else int(c/25)
+            self.total_pages = get_pages(company_to_int)
+            self.total_companys = company_to_int
+        except (AttributeError, TypeError):
+
+            if (soup == 'ERROR'):
+                self.total_companys = None
+                self.total_pages = None
+            
+            else:
+                self.total_companys = 0
+                self.total_pages = 0
 
     def scrapeMainPage(self, url:str) -> list[dict]:
         print("started scraping")
@@ -127,7 +150,7 @@ class HittaScrape:
 
 
 if __name__ == '__main__':
-    h = HittaScrape()
+    h = Scrape()
     """
     url = h.search('pr kommunikation')
     #print(url)

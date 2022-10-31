@@ -44,8 +44,9 @@ class APP:
                         # Search for user_input if 'enter' pressed
                         elif event.key == pygame.K_RETURN:
                             self.gui.searchbar_bool = False
-                            #self.gui.runnable = 1
-                            #self.gui.scrape_bool = True
+                            self.gui.searchButtonPressed()
+                            self.gui.state = 1
+
                         # Add letter to user_input if any other key pressed
                         else:
                             self.gui.user_text += event.unicode
