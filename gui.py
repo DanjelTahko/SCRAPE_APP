@@ -17,6 +17,7 @@ class GUI:
 
         # Searchbar
         self.searchbar_bool = False
+        self.searchbar_thread = False
         self.searchbar_border = pygame.Rect(128-5, 40-5, 1024+10, 40+10)
         self.searchbar        = pygame.Rect(128, 40, 1024, 40)
 
@@ -27,6 +28,9 @@ class GUI:
         # Loading Bar
         self.loading_bar_border = pygame.Rect(256-5, 650-5, 768+10, 20+10)
         self.loading_bar        = pygame.Rect(256, 650, 768, 20)
+        self.last_time = 0
+        self.array_last_time = []
+        self.last_scraped = -1
 
 
         self.state = 0
@@ -58,11 +62,10 @@ class GUI:
                 pos = pygame.mouse.get_pos()
 
                 # check if click on input bar to search
-                if (self.searchbar.collidepoint(pos)):
+                if (self.searchbar.collidepoint(pos) and self.searchbar_thread == False):
                     print("searchbar clicked")
                     self.searchbar_bool  = True
-                    self.state = 0
-       
+                    self.state = 0       
 
                 # check if click on button to press button
                 elif (self.state == 0 and self.button_bar.collidepoint(pos)):
@@ -74,31 +77,38 @@ class GUI:
                 elif (self.state == 1 and self.button_bar.collidepoint(pos)):
                     self.searchbar_bool = False
                     print("button - STARTA clicked")
+                    self.startButtonPressed()
                     self.state = 2
        
                 else:
                     print("else clicked")
                     self.searchbar_bool  = False
-
-                
-
+      
     def searchButtonPressed(self):
-        search_thread = threading.Thread(target=self.scrape.TEST_search, name="Search", args=(self.user_text,))
-        search_thread.start()
+        self.scrape.total_companys = '-'
+        self.search_thread = threading.Thread(target=self.scrape.TEST_search, name="Search", args=(self.user_text,))
+        self.search_thread.start()
+        self.searchbar_thread = True
+    
+    def startButtonPressed(self):
 
+        self.scrape_thread = threading.Thread(target=self.scrape.scrapeMainPage, name="Scrape", args=(self.scrape.url,))
+        self.scrape_thread.start()
+        self.searchbar_thread = True
 
     def drawBox(self):
-
-        if (self.state == 1 and not self.scrape.search_thread.is_alive()):
-            if (self.scrape.total_companys != None):
-                scrape_str = f"Hittade {self.scrape.total_companys} företag på {self.scrape.total_pages} sidor"
-                companys = self.font.render(scrape_str, True, COLOR4)
-                self.surface.blit(companys, (405,350))
-            else:
+        # Är detta verkligen så smart??? kanske göra om den på något sätt?
+        if (self.state == 1):
+            self.searchbar_thread = False
+            if (self.scrape.total_companys == '-'):
+                scrape_str = f"Söker efter {self.user_text}..."
+            elif (self.scrape.total_companys == None):
                 scrape_str = f"404 : Något gick fel, saknas internetanslutning kanske?"
-                companys = self.font.render(scrape_str, True, COLOR4)
-                self.surface.blit(companys, (405,350))
-
+            else:
+                scrape_str = f"Hittade {self.scrape.total_companys} företag på {self.scrape.total_pages} sidor"
+            
+            companys = self.font.render(scrape_str, True, COLOR4)
+            self.surface.blit(companys, (405,350))
 
     def drawBottom(self):
 
@@ -119,8 +129,41 @@ class GUI:
             self.surface.blit(text_search, (602,649))
 
         elif (self.state == 2):
+            # Draw loading bar
             pygame.draw.rect(self.surface, COLOR4, self.loading_bar_border, border_radius=10)
             pygame.draw.rect(self.surface, COLOR5, self.loading_bar, border_radius=10)
+
+            # Draw loaded in loading bar
+            total = 25
+            width = self.loading_bar.width
+            per = width / total
+            loading_width = per * self.scrape.total_scraped
+            pygame.draw.rect(self.surface, COLOR1, pygame.Rect(256, 650, loading_width, 20), border_radius=10)
+            
+            # Draw time left for webscrape
+            current_time = pygame.time.get_ticks()
+            if (self.scrape.total_scraped !=  self.last_scraped):
+                self.last_scraped = self.scrape.total_scraped
+                self.last_time = current_time - self.last_time
+                self.array_last_time.append(self.last_time)
+            
+            t = 0
+            for i in self.array_last_time:
+                t += i
+            t = t / len(self.array_last_time)
+
+            time_left = (t * (total - self.last_scraped)) / 60000 # to minutes
+            time_left_text = self.font.render(f"> {int(time_left)} min", True, COLOR1)
+            time_width = time_left_text.get_width()
+            self.surface.blit(time_left_text, (246-time_width,650))
+
+            p = (self.last_scraped / total) * 100
+            percent_text = self.font.render(f"{int(p)} %", True, COLOR1)
+            self.surface.blit(percent_text, (1034,650))
+
+
+
+
             
 
     def draw(self):

@@ -22,10 +22,7 @@ class Scrape:
         self.total_pages    = '-'
         self.total_scraped  = 0
         self.url = ""
-        self.word = ""
-
-        self.search_thread = threading.Thread(target=self.TEST_search, name="Search")
-        self.scrape_thread = threading.Thread(target=self.scrapeMainPage, name="Scrape", args=(self.url,))
+        self.error = False
 
     def TEST_search(self, word):
         url = self.searchIndustry(word)
@@ -33,19 +30,30 @@ class Scrape:
 
     def returnSoup(self, url:str) -> BeautifulSoup:
         try: # är timeout bra? färre / fler försök innan timeout?
-            response = requests.request('GET', url, headers=self.headers, timeout=4.0)
+            response = requests.request('GET', url, headers=self.headers, timeout=10.0)
             html = response.text 
             bs = BeautifulSoup(html, 'html.parser')
             return bs
-        except requests.ConnectionError as e:
+
+        except requests.exceptions.Timeout:
+            # Maybe set up for a retry, or continue in a retry loop
             return 'ERROR'
+        except requests.exceptions.TooManyRedirects:
+            # Tell the user their URL was bad and try a different one
+            return 'ERROR'
+        except requests.exceptions.RequestException as e:
+            # catastrophic error. bail.
+            return 'ERROR'
+        #except requests.ConnectionError as e:
+        #    return 'ERROR'
 
     def searchIndustry(self, word:str) -> str:
         self.url =  f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
         return self.url
 
     def scrapeSearch(self, url:str):
-
+        
+        self.error = False
         soup = self.returnSoup(url)
 
         try:
@@ -85,7 +93,9 @@ class Scrape:
             temp_dic['Hemsida'] = page['Hemsida']
             company_list.append(temp_dic)
 
-            self.scraped += 1
+            self.total_scraped += 1
+
+        print(company_list)
             
         return company_list
 
@@ -95,17 +105,20 @@ class Scrape:
 
         page_dict = {}
 
-        name = soup.find('h3', {'class': 'style_title__2C92s'}).text
-
         try:
-            page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
-        except AttributeError:
-             page_dict['Ort'] = None
+            name = soup.find('h3', {'class': 'style_title__2C92s'}).text
 
-        try:
-            page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
-        except AttributeError:
-            page_dict['Org-nummer'] = None
+            try:
+                page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
+            except AttributeError:
+                page_dict['Ort'] = None
+
+            try:
+                page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
+            except AttributeError:
+                page_dict['Org-nummer'] = None
+        except TypeError:
+            print("Something went wrong??")
 
         google_dic = self.googleSearch(name)
 
@@ -126,12 +139,12 @@ class Scrape:
             website = soup.find('a', {'class': 'ab_button'}).attrs.get('href')
             if (website.strip() == '#'):
                 website = self.otherWebsiteGoogleSearch(soup)
-        except AttributeError:
+        except (AttributeError, TypeError):
             website = self.otherWebsiteGoogleSearch(soup)
 
         try:
             number = soup.find('span', {'class', 'LrzXr zdqRlf kno-fv'}).text
-        except AttributeError:
+        except (AttributeError, TypeError):
             number = None
 
         return {'Hemsida': website, 'Nummer': number}
