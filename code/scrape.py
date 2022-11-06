@@ -106,33 +106,42 @@ class Scrape:
         page_dict = {}
 
         try:
+            # on subpage!
             name = soup.find('h3', {'class': 'style_title__2C92s'}).text
-
             try:
                 page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
             except AttributeError:
                 page_dict['Ort'] = None
-
             try:
                 page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
             except AttributeError:
                 page_dict['Org-nummer'] = None
-        except TypeError:
-            print("Something went wrong??")
 
-        google_dic = self.googleSearch(name)
+            google_dic = self.googleSearch(name)
+            page_dict['Nummer'] = google_dic['Nummer']
+            page_dict['Hemsida'] = google_dic['Hemsida']
 
-        page_dict['Nummer'] = google_dic['Nummer']
-        page_dict['Hemsida'] = google_dic['Hemsida']
+            return page_dict
 
-        return page_dict
+        except (AttributeError, TypeError) as e:
+            # subpage is industry page with industries , e.g Interflora
+            print(f"Sub page failed\n{url}\n{e}")
+            company = soup.find('a', {'class': 'style_searchResultLink__2i2BY'})
+            page = self.scrapeSubPage(f"https://www.hitta.se{company.attrs.get('href')}")
+            if (page != None):
+                print(f"- Found the subpage!\n{url}")
+                return page
+            else:
+                print("- Could not find subpage in subpage..")
+                return None
 
     def googleSearch(self, company_name:str) -> dict:
         """
         ### Returns website (recommendation | first) & number (if in recommendation)
         """
-        
+        print(f"in google search comp = {company_name}")
         google_url = f'https://www.google.com/search?q={quote(company_name)}'
+        print(f"in google search url  = {google_url}")
         soup = self.returnSoup(google_url)
 
         try:
@@ -144,7 +153,8 @@ class Scrape:
 
         try:
             number = soup.find('span', {'class', 'LrzXr zdqRlf kno-fv'}).text
-        except (AttributeError, TypeError):
+        except (AttributeError, TypeError) as e:
+            print(f"{company_name}\n{e}")
             number = None
 
         return {'Hemsida': website, 'Nummer': number}

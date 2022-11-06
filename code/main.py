@@ -21,12 +21,15 @@ class APP:
     def run(self):
 
         while(True):
+
             for event in pygame.event.get():
+
+                # quit program 
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
 
-                # temp quit program
+                # temp quit program with esc key
                 if event.type == pygame.KEYDOWN:
 
                     if event.key == pygame.K_ESCAPE:
