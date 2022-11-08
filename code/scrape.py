@@ -24,124 +24,156 @@ class Scrape:
         self.url = ""
         self.error = False
 
-    def TEST_search(self, word):
+    def searchThread(self, word) -> None:
+        self.error = False
+        self.total_companys = '-'
+        self.total_pages    = '-'
         url = self.searchIndustry(word)
         self.scrapeSearch(url)
-
-    def returnSoup(self, url:str) -> BeautifulSoup:
-        try: # är timeout bra? färre / fler försök innan timeout?
-            response = requests.request('GET', url, headers=self.headers, timeout=10.0)
-            html = response.text 
-            bs = BeautifulSoup(html, 'html.parser')
-            return bs
-
-        except requests.exceptions.Timeout:
-            # Maybe set up for a retry, or continue in a retry loop
-            return 'ERROR'
-        except requests.exceptions.TooManyRedirects:
-            # Tell the user their URL was bad and try a different one
-            return 'ERROR'
-        except requests.exceptions.RequestException as e:
-            # catastrophic error. bail.
-            return 'ERROR'
-        #except requests.ConnectionError as e:
-        #    return 'ERROR'
 
     def searchIndustry(self, word:str) -> str:
         self.url =  f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
         return self.url
 
-    def scrapeSearch(self, url:str):
+    def scrapeSearch(self, url:str) -> None:
         
         self.error = False
         soup = self.returnSoup(url)
 
         try:
+            # Tries to get number of companies and pages
             self.companys = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
             company_to_int = int(self.companys.replace(',', ''))
             get_pages = lambda c : int(c/25) + 1 if (c % 25 > 0) else int(c/25)
             self.total_pages = get_pages(company_to_int)
             self.total_companys = company_to_int
-        except (AttributeError, TypeError):
 
+        except (AttributeError, TypeError):
+            # If no internet connection
             if (soup == 'ERROR'):
                 self.total_companys = None
                 self.total_pages = None
-            
+            # If other error e.g can't find anything with given search
             else:
                 self.total_companys = 0
                 self.total_pages = 0
 
-    def scrapeMainPage(self, url:str) -> list[dict]:
+    def returnSoup(self, url:str) -> BeautifulSoup:
+
+        try:
+            # Tries to get response from url 
+            response = requests.request('GET', url, headers=self.headers, timeout=5.0)
+            html = response.text 
+            bs = BeautifulSoup(html, 'html.parser')
+            return bs
+
+        # No connection or connection related error´
+        except requests.exceptions.Timeout:
+            self.error = True
+            return 'ERROR'
+        except requests.exceptions.TooManyRedirects:
+            self.error = True
+            return 'ERROR'
+        except requests.exceptions.RequestException:
+            self.error = True
+            return 'ERROR'
+
+
+# If (self.error == True) while webscraping!!!
+
+    def scrapeThread(self, pages:int, org:bool, num:bool, web:bool, csv:dict) -> None:
+
+
+        companies_dict = self.scrapeMainPage(self.url, pages)
+
+
+    def scrapeMainPage(self, url:str, pages:int) -> list[dict]:
+
         print("started scraping")
-        
-        soup = self.returnSoup(url)
+        print(f"Pages to scrape : {pages}")
 
         company_list = []
 
-        #value = soup.find('span', {'class': 'spacing__left--sm text-nowrap text--normal style_tabNumbers__VbAE7'}).text
-        #print(f"Hittade {value} företag.")
+        for page in range(1, pages+1):
+            url = f"{self.url}&typ=ftg&sida={page}"
+            print(url)
+            soup = self.returnSoup(url)
+            companys = soup.find_all('a', {'class': 'style_searchResultLink__2i2BY'})
+            for c in companys:
+                temp_dic = copy.deepcopy(COMPANY_TEMPLATE)
+                temp_dic['Företag'] = c.text.strip()
+                page = self.scrapeSubPage(f"https://www.hitta.se{c.attrs.get('href')}")
+                temp_dic['Org-nummer'] = page['Org-nummer']
+                temp_dic['Ort'] = page['Ort']
+                temp_dic['Nummer'] = page['Nummer']
+                temp_dic['Hemsida'] = page['Hemsida']
+                company_list.append(temp_dic)
 
-        companys = soup.find_all('a', {'class': 'style_searchResultLink__2i2BY'})
-        for c in companys:
-            temp_dic = copy.deepcopy(COMPANY_TEMPLATE)
-            temp_dic['Företag'] = c.text.strip()
-            page = self.scrapeSubPage(f"https://www.hitta.se{c.attrs.get('href')}")
-            temp_dic['Org-nummer'] = page['Org-nummer']
-            temp_dic['Ort'] = page['Ort']
-            temp_dic['Nummer'] = page['Nummer']
-            temp_dic['Hemsida'] = page['Hemsida']
-            company_list.append(temp_dic)
-
-            self.total_scraped += 1
+                self.total_scraped += 1
 
         print(company_list)
+        print("finished scraping!")
+        print(f"Scraped total   : {len(company_list)}")
             
         return company_list
 
     def scrapeSubPage(self, url:str) -> list[str]:
+        """
+        Scrapes page with all info about comapny
+        * Ort
+        * Org-Nummer
+        * Nummer (telefon)
+        * Hemsida
+        """
         
         soup = self.returnSoup(url)
-
         page_dict = {}
 
         try:
-            # on subpage!
             name = soup.find('h3', {'class': 'style_title__2C92s'}).text
-            try:
-                page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
-            except AttributeError:
-                page_dict['Ort'] = None
-            try:
-                page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
-            except AttributeError:
-                page_dict['Org-nummer'] = None
+            if (name != None):
+                try:
+                    page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
+                except AttributeError:
+                    #print(f"Subpage - {name} : no Ort")
+                    page_dict['Ort'] = None
+                try:
+                    page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
+                except AttributeError:
+                    #print(f"Subpage - {name} : no Org-nummer")
+                    page_dict['Org-nummer'] = None
 
-            google_dic = self.googleSearch(name)
-            page_dict['Nummer'] = google_dic['Nummer']
-            page_dict['Hemsida'] = google_dic['Hemsida']
+                google_dic = self.googleSearch(name)
+                page_dict['Nummer'] = google_dic['Nummer']
+                page_dict['Hemsida'] = google_dic['Hemsida']
 
-            return page_dict
+                return page_dict
+            else:
+                # one test had no number or website, think this is the problem
+                print("Name is None? why")
+                print(url)
+                return self.scrapeSubPage(url)
 
         except (AttributeError, TypeError) as e:
-            # subpage is industry page with industries , e.g Interflora
-            print(f"Sub page failed\n{url}\n{e}")
+            # subpage is industry page with industries , e.g all Interfloras in sweden
+            # runs scrapeSubpage again with first in list
+
+            #print(f"Subpage - failed\n{url}\n{e}")
             company = soup.find('a', {'class': 'style_searchResultLink__2i2BY'})
             page = self.scrapeSubPage(f"https://www.hitta.se{company.attrs.get('href')}")
             if (page != None):
-                print(f"- Found the subpage!\n{url}")
+                #print(f"- Found the subpage!\n{url}")
                 return page
             else:
-                print("- Could not find subpage in subpage..")
+                #print("- Could not find subpage in subpage..")
                 return None
 
     def googleSearch(self, company_name:str) -> dict:
         """
-        ### Returns website (recommendation | first) & number (if in recommendation)
+        Returns website (recommendation | first) & number (if in recommendation)
         """
-        print(f"in google search comp = {company_name}")
+
         google_url = f'https://www.google.com/search?q={quote(company_name)}'
-        print(f"in google search url  = {google_url}")
         soup = self.returnSoup(google_url)
 
         try:
@@ -149,38 +181,40 @@ class Scrape:
             if (website.strip() == '#'):
                 website = self.otherWebsiteGoogleSearch(soup)
         except (AttributeError, TypeError):
+            # If no recommendation box, take first best search website
+            print("could not find website on google recommendation box")
             website = self.otherWebsiteGoogleSearch(soup)
 
         try:
             number = soup.find('span', {'class', 'LrzXr zdqRlf kno-fv'}).text
-        except (AttributeError, TypeError) as e:
-            print(f"{company_name}\n{e}")
+        except (AttributeError, TypeError):
+            # Returns None if theres no recommendation box
             number = None
 
         return {'Hemsida': website, 'Nummer': number}
 
     def otherWebsiteGoogleSearch(self, bs:BeautifulSoup) -> str:
-
+        """
+        If google has no recommendation box this method will take first website
+        in search and return it as string. If somethings wrong, None will be returned
+        """
         try:
             href = bs.select('div.yuRUbf a')[0].attrs.get('href')
             if (href.strip() != '#'):
                 return href
             else:
+                print("could not find website on google other (else)")
                 return None
         except:
+            print("could not find website on google other (except)")
             return None
 
 
 
 if __name__ == '__main__':
+
     h = Scrape()
-    """
-    url = h.search('pr kommunikation')
-    #print(url)
-    ls = h.scrapeMainPage(url)
-    df = pd.DataFrame(ls)
-    print(df)
-    """
+    
     url = h.searchIndustry('inredning')
     h.scrapeSearch(url)
     print(f"Hittade {h.companys} företag på {h.pages} sidor")
