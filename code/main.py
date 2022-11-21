@@ -13,7 +13,7 @@ class APP:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
         pygame.display.set_caption("Prospect App")
-        img = pygame.image.load('tahko_icon.png')
+        img = pygame.image.load('code/tahko_icon.png')
         pygame.display.set_icon(img)
 
         self.gui = GUI()
@@ -29,7 +29,7 @@ class APP:
                     pygame.quit()
                     sys.exit()
 
-                # temp quit program with esc key
+                # temp quit program with esc key§
                 if event.type == pygame.KEYDOWN:
 
                     if event.key == pygame.K_ESCAPE:

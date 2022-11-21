@@ -4,7 +4,8 @@ import copy
 import pandas as pd
 import requests 
 import threading
-import time
+from datetime import datetime 
+import os
 
 from settings import *
 
@@ -21,6 +22,7 @@ class Scrape:
         self.total_companys = '-'
         self.total_pages    = '-'
         self.total_scraped  = 0
+        self.word = ""
         self.url = ""
         self.error = False
 
@@ -32,6 +34,7 @@ class Scrape:
         self.scrapeSearch(url)
 
     def searchIndustry(self, word:str) -> str:
+        self.word = word
         self.url =  f"https://www.hitta.se/sök?vad={quote(word)}&riks=1"
         return self.url
 
@@ -78,14 +81,39 @@ class Scrape:
             self.error = True
             return 'ERROR'
 
+    def saveExcel(self, dictionary) -> None:
+
+        dataframe = pd.DataFrame(dictionary)
+        ## SAVING EXCEL FILE
+        try:
+            # trying to save excel file in folder ProspektApp, or create that folder
+            paths = '~/Desktop/ProspektAPP'
+
+            if(not os.path.exists(paths)):
+                os.system('mkdir ~/Desktop/ProspektAPP')
+
+            with pd.ExcelWriter('~/Desktop/ProspektAPP/test.xlsx') as writer:
+                dataframe.to_excel(writer, sheet_name='test sheet', index=False) 
+
+        except:
+            with pd.ExcelWriter('~/Desktop/test1337.xlsx') as writer:
+                dataframe.to_excel(writer, sheet_name='test sheet', index=False)
+
+
 
 # If (self.error == True) while webscraping!!!
 
-    def scrapeThread(self, pages:int, org:bool, num:bool, web:bool, csv:dict) -> None:
+    def scrapeThread(self, pages:int, array:list[str], csv:dict) -> None:
 
 
         companies_dict = self.scrapeMainPage(self.url, pages)
+        dataframe = pd.DataFrame(companies_dict)
+        if (len(array) >= 1):
+            dataframe = dataframe.dropna(subset=array)
+        dt_string = datetime.now().strftime('%Y%m%d')
+        dataframe.to_csv(f"~/Desktop/{dt_string}-{self.word}.csv", index=False)
 
+        
 
     def scrapeMainPage(self, url:str, pages:int) -> list[dict]:
 
@@ -111,7 +139,6 @@ class Scrape:
 
                 self.total_scraped += 1
 
-        print(company_list)
         print("finished scraping!")
         print(f"Scraped total   : {len(company_list)}")
             
@@ -191,6 +218,10 @@ class Scrape:
             # Returns None if theres no recommendation box
             number = None
 
+        if (website == None):
+            with open('ERROR.html', 'a') as file:
+                file.write(soup)
+
         return {'Hemsida': website, 'Nummer': number}
 
     def otherWebsiteGoogleSearch(self, bs:BeautifulSoup) -> str:
@@ -230,7 +261,7 @@ if __name__ == '__main__':
             print("finnished thred")
 
         th.is_alive()
-        time.sleep(1)
+    
 
 
 

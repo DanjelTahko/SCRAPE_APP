@@ -47,8 +47,11 @@ class GUI:
         # Filter search
         self.filter_pages   = 0
         self.filter_orgnum  = False
+        self.filter_orgnum_button = pygame.Rect(630, 309, 120, 41)
         self.filter_telnum  = False
-        self.filter_website = False
+        self.filter_telnum_button = pygame.Rect(630, 382, 120, 41)
+        self.filter_buttons = []
+
 
         self.state = 0
 
@@ -166,6 +169,13 @@ class GUI:
                     self.searchbar_bool = False
                     self.searchButtonPressed()
                     self.state = 1
+
+                elif (self.state == 1 and self.filter_orgnum_button.collidepoint(pos)):
+                    print("orgnum button pressed")
+                    if (self.filter_orgnum):
+                        self.filter_orgnum = False
+                    else:
+                        self.filter_orgnum = True
                 
                 # check if click on STARTA button to press button
                 elif (self.state == 1 and self.button_bar.collidepoint(pos)):
@@ -175,6 +185,20 @@ class GUI:
                     if (not self.searchbar_thread and self.scrape.total_companys > 0):
                         self.startButtonPressed()
                         self.state = 2
+
+                elif (self.state == 1 and self.filter_orgnum_button.collidepoint(pos)):
+                    print("orgnum button pressed")
+                    if (self.filter_orgnum):
+                        self.filter_orgnum = False
+                    else:
+                        self.filter_orgnum = True
+
+                elif (self.state == 1 and self.filter_telnum_button.collidepoint(pos)):
+                    print("telnum button pressed")
+                    if (self.filter_telnum):
+                        self.filter_telnum = False
+                    else:
+                        self.filter_telnum = True
        
                 else:
                     print("else clicked")
@@ -192,11 +216,11 @@ class GUI:
     def startButtonPressed(self):
         
         pages = self.atm_page
-        org = False
-        num = False
-        web = False
         csv = {}
-        self.scrape_thread = threading.Thread(target=self.scrape.scrapeThread, name="Scrape thread", args=(pages, org, num, web, csv))
+        filter_array = []
+        if (self.filter_orgnum): filter_array.append('Org-nummer')
+        if (self.filter_telnum): filter_array.append('Nummer')
+        self.scrape_thread = threading.Thread(target=self.scrape.scrapeThread, name="Scrape thread", args=(pages, filter_array, csv))
         self.scrape_thread.start()
         #self.searchbar_thread = True
 
@@ -210,7 +234,8 @@ class GUI:
 
         X = 35
         Y = 155
-        
+
+    
         # SEARCH STATE
         if (self.state == 0):
 
@@ -314,13 +339,13 @@ class GUI:
             # if any companies found and if theres internet connection 
             if (not self.scrape.error and not self.searchbar_thread and self.scrape.total_companys > 0):
 
-                # draws "Antal sidor :"
+                # draws "Antal sidor :" .  Y = Y+40
                 filter_pages = self.font.render("Antal sidor :", True, COLOR4)
-                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+60))
+                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+90))
                 self.surface.blit(filter_pages, filter_pages_rect)
 
                 x = (WIDTH/2)+10
-                y = Y+60
+                y = Y+90
 
                 # LEFT ARROW (if theres more than one pages and if atm page is more than first page)
                 if (self.atm_page > 1):
@@ -355,37 +380,75 @@ class GUI:
 
                 # draws "Org-Nummer :"
                 filter_orgnum = self.font.render("Org-nummer :", True, COLOR4)
-                filter_orgnum_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+103))
+                filter_orgnum_rect = filter_orgnum.get_rect(topright=((WIDTH/2)-20, Y+163))
                 self.surface.blit(filter_orgnum, filter_orgnum_rect)
 
-                x = (WIDTH/2)-20
-                y = Y+103
-
-                new_button = pygame.Rect(x+11, y+1, 20-1, 20-1)
-                new_button_b = pygame.Rect(x+10, y, 20, 20)
+                x = (WIDTH/2)-10
+                y = Y+163-9
 
                 """ color change button [TRUE or FALSE] """
 
-                pygame.draw.rect(self.surface, COLOR4, new_button_b, border_radius=5)
-                pygame.draw.rect(self.surface, COLOR2, new_button, border_radius=5)
-                text_search = self.font.render("TRUE / FALSE", True, COLOR1)
-                self.surface.blit(text_search, (x,y))
+                #x = 200
+                #y = 258
+
+                # border = x,   y,   120,   41
+                # button = x+2, y+2, 120-4, 41-4
+                # True   = x+9, y+9     h:23, w:40
+                # False  = x+59, y+9    h:23, w:48
+                # 2 + 7 + 40 + 7/(14)\7 + 48 + 7 + 2
+
+
+                self.filter_button_border = pygame.Rect(x, y, 120, 41) # boarder 5 px
+                self.filter_button        = pygame.Rect(x+2, y+2, 120-4, 41-4)
+                if (self.filter_orgnum):
+                    self.shift_button = pygame.Rect(x+2, y+2, 54, 41-4)
+                    true_button = self.font.render("True", True, COLOR2)
+                    false_button = self.font.render("False", True, COLOR1)
+                else:
+                    self.shift_button = pygame.Rect(x+56, y+2, 64, 41-4)
+                    true_button = self.font.render("True", True, COLOR1)
+                    false_button = self.font.render("False", True, COLOR2)
+                
+                pygame.draw.rect(self.surface, COLOR4, self.filter_button_border, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR2, self.filter_button, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR1, self.shift_button, border_radius=5)
+
+                self.surface.blit(true_button, (x+9,y+9)) 
+                self.surface.blit(false_button, (x+63,y+9)) 
                 
 
                 # draws "Telefonnummer :"
                 filter_pages = self.font.render("Telefonnummer  :", True, COLOR4)
-                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+146))
+                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+236))
                 self.surface.blit(filter_pages, filter_pages_rect)
+
+                x = (WIDTH/2)-10
+                y = Y+236-9
+
+                self.filter_button_border = pygame.Rect(x, y, 120, 41) # boarder 5 px
+                self.filter_button        = pygame.Rect(x+2, y+2, 120-4, 41-4)
+                if (self.filter_telnum):
+                    self.shift_button = pygame.Rect(x+2, y+2, 54, 41-4)
+                    true_button = self.font.render("True", True, COLOR2)
+                    false_button = self.font.render("False", True, COLOR1)
+                else:
+                    self.shift_button = pygame.Rect(x+56, y+2, 64, 41-4)
+                    true_button = self.font.render("True", True, COLOR1)
+                    false_button = self.font.render("False", True, COLOR2)
                 
                 
-                # draws "Hemsida :"
-                filter_pages = self.font.render("Hemsida :", True, COLOR4)
-                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+189))
-                self.surface.blit(filter_pages, filter_pages_rect)
+                pygame.draw.rect(self.surface, COLOR4, self.filter_button_border, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR2, self.filter_button, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR1, self.shift_button, border_radius=5)
+
+                self.surface.blit(true_button, (x+9,y+9))
+                self.surface.blit(false_button, (x+63,y+9)) 
+                
+                
 
                 # draws "Jämföra CSV? :"
                 filter_pages = self.font.render("Importera csv :", True, COLOR4)
-                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+232))
+                filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+309))
                 self.surface.blit(filter_pages, filter_pages_rect)
                 
 
@@ -394,9 +457,6 @@ class GUI:
                 #filter_pages_rect = filter_pages.get_rect(midtop=(WIDTH/2, Y+40))
                 #self.surface.blit(filter_pages, filter_pages_rect)
                 #pygame.draw.rect(self.surface, COLOR4, pygame.Rect(X+5, Y+38, 1200, 2), border_radius=5)
-
-
-
 
     def drawBottom(self):
 
@@ -487,6 +547,7 @@ class GUI:
         self.drawBottom()
         self.drawBox()
         self.inputs()
+        
 
 
         
