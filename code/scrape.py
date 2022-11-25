@@ -25,6 +25,7 @@ class Scrape:
         self.word = ""
         self.url = ""
         self.error = False
+        self.done = False
 
     def searchThread(self, word) -> None:
         self.error = False
@@ -103,17 +104,20 @@ class Scrape:
 
 # If (self.error == True) while webscraping!!!
 
-    def scrapeThread(self, pages:int, array:list[str], csv:dict) -> None:
+    def scrapeThread(self, pages:int, filters:list[str], csv:dict) -> None:
 
-
-        companies_dict = self.scrapeMainPage(self.url, pages)
-        dataframe = pd.DataFrame(companies_dict)
-        if (len(array) >= 1):
-            dataframe = dataframe.dropna(subset=array)
-        dt_string = datetime.now().strftime('%Y%m%d')
-        dataframe.to_csv(f"~/Desktop/{dt_string}-{self.word}.csv", index=False)
-
+        """ Thread to scrape requested pages and remove rows in dataframe according to filters """
         
+        self.error = False
+        companies_dict = self.scrapeMainPage(self.url, pages)
+        if (not self.error):
+            dataframe = pd.DataFrame(companies_dict)
+            if (len(filters) >= 1):
+                dataframe = dataframe.dropna(subset=filters)
+            dt_string = datetime.now().strftime('%Y%m%d')
+            dataframe.to_csv(f"~/Desktop/{self.word}-{dt_string}.csv", index=False)
+            self.done = True
+        self.total_scraped = 0
 
     def scrapeMainPage(self, url:str, pages:int) -> list[dict]:
 
@@ -125,12 +129,18 @@ class Scrape:
         for page in range(1, pages+1):
             url = f"{self.url}&typ=ftg&sida={page}"
             print(url)
+
             soup = self.returnSoup(url)
+            if (self.error):
+                break
+
             companys = soup.find_all('a', {'class': 'style_searchResultLink__2i2BY'})
             for c in companys:
                 temp_dic = copy.deepcopy(COMPANY_TEMPLATE)
                 temp_dic['Företag'] = c.text.strip()
                 page = self.scrapeSubPage(f"https://www.hitta.se{c.attrs.get('href')}")
+                if (self.error):
+                    break
                 temp_dic['Org-nummer'] = page['Org-nummer']
                 temp_dic['Ort'] = page['Ort']
                 temp_dic['Nummer'] = page['Nummer']
@@ -156,30 +166,31 @@ class Scrape:
         soup = self.returnSoup(url)
         page_dict = {}
 
+        if (self.error):
+            return None
+
         try:
+
             name = soup.find('h3', {'class': 'style_title__2C92s'}).text
-            if (name != None):
-                try:
-                    page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
-                except AttributeError:
-                    #print(f"Subpage - {name} : no Ort")
-                    page_dict['Ort'] = None
-                try:
-                    page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
-                except AttributeError:
-                    #print(f"Subpage - {name} : no Org-nummer")
-                    page_dict['Org-nummer'] = None
 
-                google_dic = self.googleSearch(name)
-                page_dict['Nummer'] = google_dic['Nummer']
-                page_dict['Hemsida'] = google_dic['Hemsida']
+            try:
+                page_dict['Ort'] = soup.find('p', {'class': 'text-body-short-sm-semibold spacing--xxs'}).text
+            except AttributeError:
+                page_dict['Ort'] = None
+            try:
+                page_dict['Org-nummer'] = soup.find('p', {'class': 'text-caption-md-regular color-text-placeholder'}).text.split(' ')[1]
+            except AttributeError:
+                page_dict['Org-nummer'] = None
 
-                return page_dict
-            else:
-                # one test had no number or website, think this is the problem
-                print("Name is None? why")
-                print(url)
-                return self.scrapeSubPage(url)
+            google_dic = self.googleSearch(name)
+            if (self.error):
+                return None
+                
+            page_dict['Nummer'] = google_dic['Nummer']
+            page_dict['Hemsida'] = google_dic['Hemsida']
+
+            return page_dict
+
 
         except (AttributeError, TypeError) as e:
             # subpage is industry page with industries , e.g all Interfloras in sweden
@@ -202,6 +213,9 @@ class Scrape:
 
         google_url = f'https://www.google.com/search?q={quote(company_name)}'
         soup = self.returnSoup(google_url)
+
+        if (self.error):
+            return None
 
         try:
             website = soup.find('a', {'class': 'ab_button'}).attrs.get('href')
@@ -229,6 +243,9 @@ class Scrape:
         If google has no recommendation box this method will take first website
         in search and return it as string. If somethings wrong, None will be returned
         """
+        if (self.error):
+            return None
+
         try:
             href = bs.select('div.yuRUbf a')[0].attrs.get('href')
             if (href.strip() != '#'):

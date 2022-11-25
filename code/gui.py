@@ -34,8 +34,6 @@ class GUI:
         # Loading Bar
         self.loading_bar_border = pygame.Rect(256-5, 650-5, 768+10, 20+10)
         self.loading_bar        = pygame.Rect(256, 650, 768, 20)
-        self.last_time          = 0
-        self.array_last_time    = []
         self.last_scraped       = -1
 
         # Arrows (change page)
@@ -156,7 +154,7 @@ class GUI:
                     
 
                 # check if click on input bar to search
-                elif (self.searchbar.collidepoint(pos) and self.searchbar_thread == False): 
+                elif (self.searchbar.collidepoint(pos) and self.searchbar_thread == False and self.scrape_bool == False): 
                     print("searchbar clicked")
                     self.searchbar_bool  = True
                     self.state = 0       
@@ -169,13 +167,6 @@ class GUI:
                     self.searchbar_bool = False
                     self.searchButtonPressed()
                     self.state = 1
-
-                elif (self.state == 1 and self.filter_orgnum_button.collidepoint(pos)):
-                    print("orgnum button pressed")
-                    if (self.filter_orgnum):
-                        self.filter_orgnum = False
-                    else:
-                        self.filter_orgnum = True
                 
                 # check if click on STARTA button to press button
                 elif (self.state == 1 and self.button_bar.collidepoint(pos)):
@@ -215,6 +206,7 @@ class GUI:
     
     def startButtonPressed(self):
         
+        self.scrape.done = False
         pages = self.atm_page
         csv = {}
         filter_array = []
@@ -222,6 +214,8 @@ class GUI:
         if (self.filter_telnum): filter_array.append('Nummer')
         self.scrape_thread = threading.Thread(target=self.scrape.scrapeThread, name="Scrape thread", args=(pages, filter_array, csv))
         self.scrape_thread.start()
+        self.scrape_bool        = True
+        self.last_scraped       = -1
         #self.searchbar_thread = True
 
     def drawBox(self):
@@ -476,41 +470,55 @@ class GUI:
             self.surface.blit(text_search, (x,y))
 
         elif (self.state == 2):
-            # Draw loading bar
-            pygame.draw.rect(self.surface, COLOR4, self.loading_bar_border, border_radius=10)
-            pygame.draw.rect(self.surface, COLOR5, self.loading_bar, border_radius=10)
-
-            # Draw loaded in loading bar
-            total = self.atm_page * 25 
-            if (total > self.scrape.total_companys):
-                total = self.scrape.total_companys
-
-            width = self.loading_bar.width
-            per = width / total
-            loading_width = per * self.scrape.total_scraped
-            pygame.draw.rect(self.surface, COLOR1, pygame.Rect(256, 650, loading_width, 20), border_radius=10)
             
-            # Draw time left for webscrape
-            current_time = pygame.time.get_ticks()
-            if (self.scrape.total_scraped !=  self.last_scraped):
-                self.last_scraped = self.scrape.total_scraped
-                self.last_time = current_time - self.last_time
-                self.array_last_time.append(self.last_time)
-            
-            t = 0
-            for i in self.array_last_time:
-                t += i
-            t = t / len(self.array_last_time)
+            if (self.scrape.error or self.scrape.done):
+                """if theres error with scraping, e.g no internet connection or if scraping is done """
 
-            #time_left = (t * (total - self.last_scraped)) / 60000 # to minutes
-            time_left = (t * (total - self.last_scraped)) / 6000 # to seconds
-            time_left_text = self.font.render(f"~ {int(time_left/60)} min {time_left%60:.0f} sec", True, COLOR1)
-            time_width = time_left_text.get_width()
-            self.surface.blit(time_left_text, (246-time_width,649))
+                self.scrape_bool = False
 
-            p = (self.last_scraped / total) * 100
-            percent_text = self.font.render(f"{int(p)} %", True, COLOR1)
-            self.surface.blit(percent_text, (1034,649))
+                if (self.scrape.error):
+                    scrape_str = "404 : Något gick fel, saknas internetanslutning kanske?"
+                elif (self.scrape.done):
+                    scrape_str = "KLAR - csv fil sparad på skrivbord"
+
+                msg = self.font.render(scrape_str, True, COLOR1)
+                msg_rect = msg.get_rect(center=((WIDTH/2), 660))
+
+                frame_border = pygame.Rect(0,0,(msg.get_width()+20), (msg.get_height()+20)) 
+                frame = pygame.Rect(0,0,(msg.get_width()+10), (msg.get_height()+10)) 
+                frame.center = frame_border.center = msg_rect.center
+
+                pygame.draw.rect(self.surface, COLOR4, frame_border, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR2, frame, border_radius=5)
+                self.surface.blit(msg, msg_rect)
+
+            else:
+
+                # Draw loading bar
+                pygame.draw.rect(self.surface, COLOR4, self.loading_bar_border, border_radius=10)
+                pygame.draw.rect(self.surface, COLOR5, self.loading_bar, border_radius=10)
+
+                # Draw loaded in loading bar
+                total = self.atm_page * 25 
+                if (total > self.scrape.total_companys):
+                    total = self.scrape.total_companys
+
+                width = self.loading_bar.width
+                per = width / total
+                loading_width = per * self.scrape.total_scraped
+                pygame.draw.rect(self.surface, COLOR1, pygame.Rect(256, 650, loading_width, 20), border_radius=10)
+                """
+                scraped 72 total in 01:16:37 == 76 seconds
+                ~ 1 object / second
+                """
+                time_left = (total - self.scrape.total_scraped) #/ 6000 to seconds
+                time_left_text = self.font.render(f"~ {int(time_left/60)} min {time_left%60:.0f} sec", True, COLOR1)
+                time_width = time_left_text.get_width()
+                self.surface.blit(time_left_text, (246-time_width,649))
+
+                p = (self.scrape.total_scraped / total) * 100
+                percent_text = self.font.render(f"{int(p)} %", True, COLOR1)
+                self.surface.blit(percent_text, (1034,649))
 
     def drawBase(self):
 
