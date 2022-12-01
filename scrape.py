@@ -3,9 +3,7 @@ from urllib.parse import quote
 import copy
 import pandas as pd
 import requests 
-import threading
 from datetime import datetime 
-import os
 
 from settings import *
 
@@ -82,41 +80,41 @@ class Scrape:
             self.error = True
             return 'ERROR'
 
-    def saveExcel(self, dictionary) -> None:
-
-        dataframe = pd.DataFrame(dictionary)
-        ## SAVING EXCEL FILE
-        try:
-            # trying to save excel file in folder ProspektApp, or create that folder
-            paths = '~/Desktop/ProspektAPP'
-
-            if(not os.path.exists(paths)):
-                os.system('mkdir ~/Desktop/ProspektAPP')
-
-            with pd.ExcelWriter('~/Desktop/ProspektAPP/test.xlsx') as writer:
-                dataframe.to_excel(writer, sheet_name='test sheet', index=False) 
-
-        except:
-            with pd.ExcelWriter('~/Desktop/test1337.xlsx') as writer:
-                dataframe.to_excel(writer, sheet_name='test sheet', index=False)
-
-
-
-# If (self.error == True) while webscraping!!!
-
     def scrapeThread(self, pages:int, filters:list[str], csv:dict) -> None:
 
         """ Thread to scrape requested pages and remove rows in dataframe according to filters """
         
         self.error = False
+
+        # scrape all pages starting with url 
         companies_dict = self.scrapeMainPage(self.url, pages)
+
+        # if everythings ok, save to /Desktop
         if (not self.error):
+
+            # create dataframe with scraped companies
             dataframe = pd.DataFrame(companies_dict)
+
+            # if theres any filters, drop rows according to filters
             if (len(filters) >= 1):
                 dataframe = dataframe.dropna(subset=filters)
+
+            # if theres imported csv to compare, drop duplicate rows
+            if (csv != None):
+                columns = ['Företag', 'Org-nummer', 'Ort', 'Nummer', 'Hemsida']
+                csv_to_compare = pd.read_csv(f"~/Desktop/{csv}")
+                # check if imported csv has same structure as scraped csv, otherwise probs not scraped csv
+                if (list(csv_to_compare.columns) == columns):
+                    df = pd.concat([dataframe, csv_to_compare])
+                    dataframe = df.drop_duplicates(keep=False)
+                else:
+                    print("ERROR - Imported csv does not have columns ['Företag', 'Org-nummer', 'Ort', 'Nummer', 'Hemsida']\nCan't compare and drop duplicates")
+            
+            # get today date and save csv to /Desktop with todays date
             dt_string = datetime.now().strftime('%Y%m%d')
             dataframe.to_csv(f"~/Desktop/{self.word}-{dt_string}.csv", index=False)
             self.done = True
+
         self.total_scraped = 0
 
     def scrapeMainPage(self, url:str, pages:int) -> list[dict]:
@@ -233,8 +231,10 @@ class Scrape:
             number = None
 
         if (website == None):
+            # if website not available, write webscraped html to html file
             with open('ERROR.html', 'a') as file:
                 file.write(soup)
+                self.error = True
 
         return {'Hemsida': website, 'Nummer': number}
 
@@ -257,29 +257,9 @@ class Scrape:
             print("could not find website on google other (except)")
             return None
 
-
-
 if __name__ == '__main__':
-
+    """for testing"""
     h = Scrape()
-    
     url = h.searchIndustry('inredning')
     h.scrapeSearch(url)
     print(f"Hittade {h.companys} företag på {h.pages} sidor")
-    th = threading.Thread(target=h.scrapeMainPage, name="Scrape", args=(url,))
-    #th.start()
-    i = 1
-    while(True):
-        print(h.scraped)
-        if (i == 1):
-            i = 0
-            print("starting thread")
-            th.start()
-            print("finnished thred")
-
-        th.is_alive()
-    
-
-
-
-    

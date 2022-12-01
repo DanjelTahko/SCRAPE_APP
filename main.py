@@ -11,14 +11,12 @@ class APP:
         pygame.init()
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
+        
         pygame.display.set_caption("Prospect App")
-        img = pygame.image.load('code/tahko_icon.png')
-        pygame.display.set_icon(img)
 
         self.gui = GUI()
 
-    def run(self):
+    def run(self) -> None:
 
         while(True):
 
@@ -31,10 +29,6 @@ class APP:
 
                 # temp quit program with esc key§
                 if event.type == pygame.KEYDOWN:
-
-                    if event.key == pygame.K_ESCAPE:
-                        pygame.quit()
-                        sys.exit()
 
                     if (self.gui.searchbar_bool == True):
                         # Clear all text if 'command' + 'return' pressed

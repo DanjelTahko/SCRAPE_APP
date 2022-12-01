@@ -1,6 +1,7 @@
 import pygame
 import time
 import threading
+import os
 
 from scrape import Scrape
 from settings import *
@@ -9,11 +10,6 @@ from config import *
 class GUI:
 
     def __init__(self) -> None:
-
-        #self.searchbar_thread = False ???
-        # what does it do?
-        # fix time in loading bar! total should be total companies chosen in filter
-
         
         # Surface and font init
         self.surface    = pygame.display.get_surface()
@@ -43,19 +39,19 @@ class GUI:
         self.left_arrow_bool  = False
 
         # Filter search
-        self.filter_pages   = 0
         self.filter_orgnum  = False
         self.filter_orgnum_button = pygame.Rect(630, 309, 120, 41)
         self.filter_telnum  = False
         self.filter_telnum_button = pygame.Rect(630, 382, 120, 41)
         self.filter_buttons = []
+        self.filter_csv = None
 
-
-        self.state = 0
-
+        # Webscraping init
         self.scrape = Scrape()
         self.scrape_bool = False
+        self.state = 0
 
+        # Button debounce 
         self.time = 0
         self.button_cooldown = 250
         self.pressed = False
@@ -69,9 +65,8 @@ class GUI:
         self.industry_pages = 1
         self.atm_page = 1
 
-    
-    def createList(self, dictionary_industries):
-        """ Creates industry rect that you can click of dictionary"""
+    def createList(self, dictionary_industries:dict) -> None:
+        """ Creates industry rect that you can click, from dictionary"""
         # Creates text, surface and the rect
 
         self.rect_industries_array = []
@@ -83,11 +78,14 @@ class GUI:
         # | 10 | T(390) | 10 | T(390) | 10 | T(390) | 10 |
 
         for index, industry in enumerate(dictionary_industries):
+            """iterates through dictionary and appends to respective array"""
             
             companys_text = self.font.render(industry, True, COLOR4)
             self.surf_industries_array.append(companys_text)
+
             companys_rect = companys_text.get_rect(topleft=(x_text+10, y_text))
             self.rect_industries_array.append(companys_rect)
+
             self.text_industries_array.append(industry)
             y_text += 23 + 10
 
@@ -101,10 +99,12 @@ class GUI:
 
         self.atm_page = 1
 
-    def inputs(self):
+    def inputs(self) -> None:
 
         """
-        STATES
+        Takes user input in different states
+
+        STATES:
         0 - Search (searchbar and industries/categories)
         1 - Filter (sets filters for starting web scrape)
         2 - Scrape (scraping pages)
@@ -177,6 +177,7 @@ class GUI:
                         self.startButtonPressed()
                         self.state = 2
 
+                # check to change filter button True/False for org-number
                 elif (self.state == 1 and self.filter_orgnum_button.collidepoint(pos)):
                     print("orgnum button pressed")
                     if (self.filter_orgnum):
@@ -184,18 +185,40 @@ class GUI:
                     else:
                         self.filter_orgnum = True
 
+                # check to change filter button True/False for telnumber
                 elif (self.state == 1 and self.filter_telnum_button.collidepoint(pos)):
                     print("telnum button pressed")
                     if (self.filter_telnum):
                         self.filter_telnum = False
                     else:
                         self.filter_telnum = True
+
+                elif (self.state == 1 and self.import_csv.collidepoint(pos)):
+                    """pressing import csv button, print out all csv files from desktop"""
+                    csv_list = []
+                    for file in os.listdir(os.path.expanduser('~/Desktop')):
+                        if file[-4:] == '.csv':
+                            csv_list.append(file)
+                    self.createList(csv_list)
+                    self.state = 3
+                
+                elif (self.state == 3 and mouse_rect.collidelist(self.rect_industries_array) >= 0):
+                    # store index in variable to get industry value/text
+                    index = mouse_rect.collidelist(self.rect_industries_array)
+                    if (self.atm_page > 1):
+                        index += 30 * (self.atm_page-1)
+                    print(f"{self.text_industries_array[index]} - clicked")
+                    self.filter_csv = self.text_industries_array[index]
+                    self.searchbar_thread = True
+                    self.state = 1
        
                 else:
                     print("else clicked")
                     self.searchbar_bool  = False
       
-    def searchButtonPressed(self):
+    def searchButtonPressed(self) -> None:
+        """Starts search thread"""
+        self.filter_csv = None
         self.searchbar_thread = True
         # Create & Start thread = Makes search with word to find number of companies and pages
         self.search_thread = threading.Thread(target=self.scrape.searchThread, name="Search Thread", args=(self.user_text,))
@@ -204,11 +227,11 @@ class GUI:
         self.dictionary = HITTA_INDUSTRY
         self.createList(self.dictionary)
     
-    def startButtonPressed(self):
-        
+    def startButtonPressed(self) -> None:
+        """Starts the webscraping thread itself"""
         self.scrape.done = False
         pages = self.atm_page
-        csv = {}
+        csv = self.filter_csv
         filter_array = []
         if (self.filter_orgnum): filter_array.append('Org-nummer')
         if (self.filter_telnum): filter_array.append('Nummer')
@@ -216,20 +239,15 @@ class GUI:
         self.scrape_thread.start()
         self.scrape_bool        = True
         self.last_scraped       = -1
-        #self.searchbar_thread = True
 
-    def drawBox(self):
+    def drawBox(self) -> None:
         """
         Draws inside middlebox\n
         """
-        # BOX = pygame.Rect(x=35, y=155, w=1210, h=410)
-        # TEXT HEIGHT = 23 pixels
-        # | 10 | T(390) | 10 | T(390) | 10 | T(390) | 10 |
 
         X = 35
         Y = 155
 
-    
         # SEARCH STATE
         if (self.state == 0):
 
@@ -438,21 +456,107 @@ class GUI:
                 self.surface.blit(true_button, (x+9,y+9))
                 self.surface.blit(false_button, (x+63,y+9)) 
                 
-                
-
                 # draws "Jämföra CSV? :"
                 filter_pages = self.font.render("Importera csv :", True, COLOR4)
                 filter_pages_rect = filter_pages.get_rect(topright=((WIDTH/2)-20, Y+309))
                 self.surface.blit(filter_pages, filter_pages_rect)
+
+                x = (WIDTH/2)-10
+                y = Y+309-9
+
                 
+                msg_str = "Inget valt"
+                if (self.filter_csv != None):
+                    msg_str = self.filter_csv
 
-                # draws Jämföra csv???
-                #filter_pages = self.font.render("Antal sidor :", True, COLOR4)
-                #filter_pages_rect = filter_pages.get_rect(midtop=(WIDTH/2, Y+40))
-                #self.surface.blit(filter_pages, filter_pages_rect)
-                #pygame.draw.rect(self.surface, COLOR4, pygame.Rect(X+5, Y+38, 1200, 2), border_radius=5)
+                msg = self.font.render(msg_str, True, COLOR1)
+                msg_rect = msg.get_rect()
 
-    def drawBottom(self):
+                import_csv_border = pygame.Rect(x,y,(msg.get_width()+20), (msg.get_height()+20)) 
+                self.import_csv = pygame.Rect(x, y, (msg.get_width()+10), (msg.get_height()+10))
+                pygame.draw.rect(self.surface, COLOR1, self.import_csv, border_radius=5)
+
+                msg_rect.center = self.import_csv.center = import_csv_border.center
+
+                pygame.draw.rect(self.surface, COLOR4, import_csv_border, border_radius=5)
+                pygame.draw.rect(self.surface, COLOR2, self.import_csv, border_radius=5)
+                self.surface.blit(msg, msg_rect)
+
+        # IMPORT STATE
+        elif (self.state == 3):
+
+            # loops through range where index will be [range_start : range_stop]
+            # sets pages based on how many industries/sub industries and so on
+            # e.g 1 page is 30 industries, so 31 industries will be 2 pages
+            get_pages = lambda c : int(c/30) + 1 if (c % 30 > 0) else int(c/30)
+            self.industry_pages = get_pages(len(self.text_industries_array))
+            
+            # sets start and stop range of array for showing industries at right page 
+            # e.g page 2 will show industries in range [30 : 60]
+            # but if array only contains 44 industries it will be [30 : 44]
+            range_start = 0
+            range_stop = 30
+            if (self.industry_pages > 1):
+                range_start += 30 * (self.atm_page-1)
+                if (self.atm_page != self.industry_pages):
+                    range_stop += 30 * (self.atm_page-1)
+                else:
+                    range_stop = range_start + len(self.text_industries_array) % 30
+            else:
+                range_stop = len(self.text_industries_array)
+
+            # loops through range where index will be [range_start : range_stop]
+            for index in range(range_start, range_stop):
+                # sets surf,text and rect to right one 
+                surf = self.surf_industries_array[index]
+                text = self.text_industries_array[index]
+                rect = self.rect_industries_array[index]
+                # if text is too long (>540px) delete two last words 
+                if (surf.get_width() > 540):
+                    text_strip = text.split()
+                    new_text = ' '.join(text_strip[:-2])
+                    surf = self.font.render(new_text, True, COLOR4)
+                # deletes only last word (textframe can only be max 390px)
+                elif (surf.get_width() > 390):
+                    text_strip = text.split()
+                    new_text = ' '.join(text_strip[:-1])
+                    surf = self.font.render(new_text, True, COLOR4)
+                # draws text on surface 
+                self.surface.blit(surf, rect)
+
+            # draws page e.g 1/6
+            pages_text = self.font.render(f"{self.atm_page}/{self.industry_pages}", True, COLOR4)
+            pages_rect = pages_text.get_rect(midtop=(640, 520))
+            self.surface.blit(pages_text, pages_rect)
+            pages_width_r = pages_rect.width / 2
+
+            # RIGHT ARROW (if theres more than one pages and if atm page is less than amount of pages)
+            if (self.industry_pages > 1 and self.atm_page < self.industry_pages):
+                # so we can click on next page
+                self.right_arrow_bool = True
+                # right of page number
+                x = 645 + pages_width_r
+                right_a = ((x, 520), (x, 520+20), (x+20, 520+10), (x, 520))
+                self.right_arrow = pygame.Rect(x, 520, 20, 20)
+                pygame.draw.polygon(self.surface, COLOR5, right_a)
+            else:
+                # sets to False so we cant change page to next (when theres only 1 page available or no next page)
+                self.right_arrow_bool = False 
+
+            # LEFT ARROW (if theres more than one pages and if atm page is more than first page)
+            if (self.industry_pages > 1 and self.atm_page > 1):
+                # so we can click on previous page
+                self.left_arrow_bool = True
+                # left of page number
+                x = 635 - pages_width_r
+                left_a = ((x, 520), (x, 520+20), (x-20, 520+10), (x, 520))
+                self.left_arrow = pygame.Rect(x-20, 520, 20, 20)
+                pygame.draw.polygon(self.surface, COLOR5, left_a)
+            else:
+                # sets to False so we cant change page (when theres only 1 page available or on page 1)
+                self.left_arrow_bool = False
+                  
+    def drawBottom(self) -> None:
 
         if (self.state == 0 or self.state == 1):
 
@@ -520,7 +624,7 @@ class GUI:
                 percent_text = self.font.render(f"{int(p)} %", True, COLOR1)
                 self.surface.blit(percent_text, (1034,649))
 
-    def drawBase(self):
+    def drawBase(self) -> None:
 
         # Draw Top & Bottom Bar
         pygame.draw.rect(self.surface, COLOR3, pygame.Rect(0, 0, 1280, 120))
@@ -550,12 +654,9 @@ class GUI:
         pygame.draw.rect(self.surface, COLOR4, pygame.Rect(30, 150, 1220, 420), border_radius=5)
         pygame.draw.rect(self.surface, COLOR2, pygame.Rect(30+5, 150+5, 1220-10, 420-10), border_radius=5)
 
-    def update(self):
+    def update(self) -> None:
         self.drawBase()
         self.drawBottom()
         self.drawBox()
         self.inputs()
-        
-
-
         
