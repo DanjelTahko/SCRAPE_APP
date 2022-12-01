@@ -3,6 +3,6 @@ __pycache__
 TODO.txt
 install.txt
 
-venv/
-material/
-example/
+venv
+material
+example

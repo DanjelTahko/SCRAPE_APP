@@ -45,11 +45,11 @@ pip3 install -r requirements.txt
 ## Create App
 
 ```bash
-pyinstaller --windowed --name="Prospect" --icon="prospect_icon.icns" main.py
+pyinstaller --windowed --name="Prospect" --icon="icon.icns" main.py
 ```
 
 #### If app icon in dock not same as app icon
 
 ```bash
-rm ~/Desktop/SCRAPE_APP/dist/Prospect.app/Contents/MacOS/pygame/pygame_icon_mac.bmp && mv ~/Desktop/SCRAPE_APP/prospect_icon.icns ~/Desktop/SCRAPE_APP/dist/Prospect.app/Contents/MacOS/pygame/pygame_icon_mac.bmp
+rm ~/Desktop/SCRAPE_APP/dist/Prospect.app/Contents/MacOS/pygame/pygame_icon_mac.bmp && mv ~/Desktop/SCRAPE_APP/icon.icns ~/Desktop/SCRAPE_APP/dist/Prospect.app/Contents/MacOS/pygame/pygame_icon_mac.bmp
 ```
